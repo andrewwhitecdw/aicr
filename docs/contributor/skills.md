@@ -28,6 +28,7 @@ tree. They complement — they do not replace — the coding rules in
 | [`aicr-managing-openvex`](https://github.com/NVIDIA/aicr/blob/main/.agents/skills/aicr-managing-openvex/SKILL.md) | Add, update, or remove CVE/GHSA suppressions in `.openvex.json`, the OpenVEX document consumed by the daily image vulnerability scan. |
 | [`aicr-release-notes`](https://github.com/NVIDIA/aicr/blob/main/.agents/skills/aicr-release-notes/SKILL.md) | Draft the human-readable GitHub release-notes summary for an upcoming release by grouping commits since the last tag into thematic highlights. |
 | [`aicr-uat-report`](https://github.com/NVIDIA/aicr/blob/main/.agents/skills/aicr-uat-report/SKILL.md) | Report UAT health across service x GPU x intent combinations from the UAT Run workflow, classifying failures as product vs infra signal, and download the per-run cluster debug bundles to triage them. |
+| [`aicr-cross-review`](https://github.com/NVIDIA/aicr/blob/main/.agents/skills/aicr-cross-review/SKILL.md) | Multi-agent PR review using Claude Code, Codex, and CodeRabbit with integration impact analysis, 2-of-3 consensus, and adversarial verification. **Claude Code only** — uses Workflow/Agent tools unavailable in other agents. |
 
 ## How Skills Are Invoked
 
