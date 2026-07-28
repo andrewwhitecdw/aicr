@@ -1,0 +1,129 @@
+name: security-sweep
+# Merged design (2026-07-26): workflow_dispatch + commit-pin + deterministic
+# scan fingerprint (nvidia-sweep AGENTS.md "Security sweep after push") plus
+# push/PR triggers and CodeQL-on-PR from the Dagger DailyRun pipeline.
+# Lives on fork DEFAULT branches only. NEVER commit this file to a
+# sweep/bugfix-* branch — it must not appear in upstream PR diffs.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to scan (e.g. sweep/bugfix-foo)"
+        required: true
+      commit:
+        description: "Expected HEAD SHA of that branch"
+        required: true
+  push: # fires automatically only for refs that themselves contain this file
+    branches: ["sweep/**"]
+  pull_request: # PRs opened within the fork
+    branches: [main, master, develop, dev, release]
+
+permissions:
+  contents: read
+  security-events: write # SARIF upload to Code Scanning
+  actions: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Pin to expected commit
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ -n "${{ inputs.commit }}" ]; then
+            test "$(git rev-parse HEAD)" = "${{ inputs.commit }}" || { echo "HEAD mismatch - branch moved"; exit 1; }
+          fi
+
+      - name: Initialize CodeQL
+        if: github.event_name == 'pull_request'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python,go,javascript,cpp
+
+      - name: Autobuild for CodeQL
+        if: github.event_name == 'pull_request'
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Run CodeQL analysis
+        if: github.event_name == 'pull_request'
+        uses: github/codeql-action/analyze@v3
+
+      - uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - uses: semgrep/semgrep-action@v1
+        with:
+          config: |
+            p/default
+            p/security-audit
+            p/owasp-top-ten
+            p/cwe-top-25
+          generateSarif: true
+        continue-on-error: true
+
+      - name: OSV-Scanner
+        continue-on-error: true
+        run: |
+          curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /tmp/osv-scanner
+          chmod +x /tmp/osv-scanner
+          /tmp/osv-scanner scan --format=sarif --output=osv.sarif . || true
+
+      - name: Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .
+          category: security-sweep
+
+      - name: Generate scan fingerprint manifest
+        if: always()
+        run: |
+          SCAN_UUID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
+          TREE=$(git rev-parse 'HEAD^{tree}')
+          COMMIT=$(git rev-parse HEAD)
+          SARIF_HASHES=$(sha256sum *.sarif 2>/dev/null | sort | sha256sum | cut -d' ' -f1)
+          FINGERPRINT=$(echo -n "${TREE}${SARIF_HASHES}" | sha256sum | cut -d' ' -f1)
+          jq -n \
+            --arg scan_uuid "$SCAN_UUID" \
+            --arg fingerprint "$FINGERPRINT" \
+            --arg commit "$COMMIT" \
+            --arg tree "$TREE" \
+            --arg branch "${{ inputs.branch || github.ref_name }}" \
+            --arg repo "${{ github.repository }}" \
+            --arg trigger "${{ github.event_name }}" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg scanned_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{scan_uuid:$scan_uuid, fingerprint:$fingerprint, repo:$repo, branch:$branch,
+              commit:$commit, tree:$tree, trigger:$trigger, run_id:$run_id, run_url:$run_url,
+              scanned_at:$scanned_at,
+              tools:{gitleaks:"action@v2", trivy:"action@master", semgrep:"action@v1", osv:"release-binary", codeql:"pr-only"}}' \
+            > scan-manifest.json
+          cat scan-manifest.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compute artifact-safe branch name
+        id: art
+        run: echo "safe_branch=${{ inputs.branch || github.ref_name }}" | tr '/:' '--' >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scan-manifest-${{ steps.art.outputs.safe_branch }}
+          path: |
+            scan-manifest.json
+            *.sarif
+          retention-days: 90
