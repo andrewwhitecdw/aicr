@@ -40,8 +40,8 @@ The deep-link is the current Evidence rendering. It is distinct from — and coe
 {/* BEGIN AICR-HEALTH */}
 ## Summary
 
-- Recipes: **44**
-- Pass: **44** · Warn: **0** · Fail: **0** · Unknown: **0**
+- Recipes: **45**
+- Pass: **45** · Warn: **0** · Fail: **0** · Unknown: **0**
 
 ## Recipes
 
@@ -73,6 +73,7 @@ The deep-link is the current Evidence rendering. It is distinct from — and coe
 | h200-eks-training | eks | h200 | — | training | — | pass | R:0 D:4 P:1 C:10 | pending |
 | rtx-pro-6000-eks-ubuntu-inference-dynamo | eks | rtx-pro-6000 | ubuntu | inference | dynamo | pass | R:0 D:4 P:1 C:11 | pending |
 | rtx-pro-6000-eks-ubuntu-inference-nim | eks | rtx-pro-6000 | ubuntu | inference | nim | pass | R:0 D:4 P:0 C:11 | pending |
+| rtx-pro-6000-eks-ubuntu-training-kubeflow | eks | rtx-pro-6000 | ubuntu | training | kubeflow | pass | R:0 D:4 P:0 C:8 | pending |
 | a100-gke-cos-training-kubeflow | gke | a100 | cos | training | kubeflow | pass | R:0 D:4 P:0 C:10 | pending |
 | b200-gke-cos-inference-dynamo | gke | b200 | cos | inference | dynamo | pass | R:0 D:4 P:0 C:11 | pending |
 | b200-gke-cos-training-kubeflow | gke | b200 | cos | training | kubeflow | pass | R:0 D:4 P:0 C:10 | pending |
