@@ -14,26 +14,26 @@ This is a **different axis** from the per-recipe **Coverage** column in the reci
 
 | Item | Exercised by | Hardware | Cadence | Status | Notes |
 |------|--------------|----------|---------|--------|-------|
-| `cuj1-training-kubeflow` | chainsaw, uat, demo | GPU (H100, real) | nightly | covered | — |
+| `cuj1-training-kubeflow` | chainsaw, demo | simulated / none | per-PR | covered | — |
 | `cuj2-inference-dynamo` | demo | GPU (unwired) | — | stubbed | UAT assets present but no scheduled workflow runs them — inference UAT tracked by DC3 (#1276), Azure by DC6 (#1280) |
 
 ## CLI verbs
 
 | Item | Exercised by | Hardware | Cadence | Status | Notes |
 |------|--------------|----------|---------|--------|-------|
-| `bundle` | chainsaw, uat, demo | GPU (H100, real) | nightly | covered | — |
+| `bundle` | chainsaw, demo | simulated / none | per-PR | covered | — |
 | `diff` | — | — | — | not-yet-covered | — |
 | `evidence digest` | — | — | — | not-yet-covered | — |
 | `evidence publish` | demo | docs | — | not-yet-covered | documented in demos only; no executable test yet |
 | `evidence sign` | — | — | — | not-yet-covered | — |
-| `evidence verify` | uat, demo | GPU (H100, real) | nightly | covered | — |
+| `evidence verify` | demo | docs | — | not-yet-covered | documented in demos only; no executable test yet |
 | `mirror list` | — | — | — | not-yet-covered | — |
 | `query` | demo | docs | — | not-yet-covered | documented in demos only; no executable test yet |
-| `recipe` | chainsaw, uat, demo | GPU (H100, real) | nightly | covered | — |
+| `recipe` | chainsaw, demo | simulated / none | per-PR | covered | — |
 | `recipe list` | — | — | — | not-yet-covered | — |
 | `recipe verify-catalog` | — | — | — | not-yet-covered | — |
 | `skill` | demo | docs | — | not-yet-covered | documented in demos only; no executable test yet |
-| `snapshot` | chainsaw, uat, demo | GPU (H100, real) | nightly | covered | — |
-| `trust update` | chainsaw, uat, demo | GPU (H100, real) | nightly | covered | — |
+| `snapshot` | chainsaw, demo | simulated / none | per-PR | covered | — |
+| `trust update` | chainsaw, demo | simulated / none | per-PR | covered | — |
 | `validate` | chainsaw, uat, demo | GPU (H100, real) | nightly | covered | — |
 | `verify` | chainsaw, demo | simulated / none | per-PR | covered | — |
