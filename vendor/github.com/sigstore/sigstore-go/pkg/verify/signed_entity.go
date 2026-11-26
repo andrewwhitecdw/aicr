@@ -15,6 +15,7 @@
 package verify
 
 import (
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/json"
@@ -65,6 +66,9 @@ type VerifierConfig struct { // nolint: revive
 	tlogEntriesThreshold int
 	// requireSCTs requires SCTs in Fulcio certificates
 	requireSCTs bool
+	// omitStatementPredicate builds VerificationResult.Statement without
+	// parsing the predicate (Predicate is nil)
+	omitStatementPredicate bool
 	// ctlogEntriesThreshold is the minimum number of verified SCTs in
 	// a Fulcio certificate
 	ctlogEntriesThreshold int
@@ -118,6 +122,24 @@ type SignedEntityVerifier = Verifier
 // Deprecated: Use NewVerifier instead
 func NewSignedEntityVerifier(trustedMaterial root.TrustedMaterial, options ...VerifierOption) (*Verifier, error) {
 	return NewVerifier(trustedMaterial, options...)
+}
+
+// WithoutStatementPredicate configures the Verifier to omit the in-toto
+// statement's predicate from the VerificationResult: Statement carries
+// the statement type, subjects, and predicate type, but Predicate is
+// left nil.
+//
+// Parsing a predicate materializes it as a structpb tree — one heap
+// object per JSON node — which for large predicates (SBOMs,
+// vulnerability reports, build provenance) allocates a large multiple of
+// the payload size. Callers that read the predicate from the verified
+// DSSE payload directly, or do not need it at all, can use this option
+// to avoid that cost.
+func WithoutStatementPredicate() VerifierOption {
+	return func(c *VerifierConfig) error {
+		c.omitStatementPredicate = true
+		return nil
+	}
 }
 
 // WithSignedTimestamps configures the Verifier to expect RFC 3161
@@ -329,6 +351,7 @@ type PolicyConfig struct {
 	ignoreArtifact        bool
 	ignoreIdentities      bool
 	requireSigningKey     bool
+	context               []byte
 	certificateIdentities CertificateIdentities
 	verifyArtifacts       bool
 	artifacts             []io.Reader
@@ -347,6 +370,9 @@ func (p *PolicyConfig) withVerifyAlreadyConfigured() error {
 func (p *PolicyConfig) validate() error {
 	if p.RequireIdentities() && len(p.certificateIdentities) == 0 {
 		return errors.New("can't verify identities without providing at least one identity")
+	}
+	if len(p.context) > 0 && !p.requireSigningKey {
+		return errors.New("WithContext must be used with WithKey")
 	}
 
 	return nil
@@ -438,6 +464,9 @@ func WithCertificateIdentity(identity CertificateIdentity) PolicyOption {
 		if p.requireSigningKey {
 			return errors.New("can't use WithCertificateIdentity while using WithKey")
 		}
+		if len(p.context) > 0 {
+			return errors.New("can't use WithCertificateIdentity while using WithContext")
+		}
 
 		p.certificateIdentities = append(p.certificateIdentities, identity)
 		return nil
@@ -454,6 +483,22 @@ func WithKey() PolicyOption {
 
 		p.requireSigningKey = true
 		p.ignoreIdentities = true
+		return nil
+	}
+}
+
+// WithContext allows the caller of Verify to require that a public-key-signed
+// entity was logged with the given 32-byte SHA-256 context digest.
+func WithContext(context []byte) PolicyOption {
+	return func(p *PolicyConfig) error {
+		if len(context) != sha256.Size {
+			return fmt.Errorf("context must be a %d-byte SHA-256 digest, got %d bytes", sha256.Size, len(context))
+		}
+		if len(p.certificateIdentities) > 0 {
+			return errors.New("can't use WithContext while using WithCertificateIdentity")
+		}
+
+		p.context = context
 		return nil
 	}
 }
@@ -602,6 +647,9 @@ func (v *Verifier) Verify(entity SignedEntity, pb PolicyBuilder) (*VerificationR
 	policy, err := pb.BuildConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build policy: %w", err)
+	}
+	if len(policy.context) > 0 {
+		return nil, errors.New("WithContext is only supported by IdentityVerifier")
 	}
 
 	// Let's go by the spec: https://docs.google.com/document/d/1kbhK2qyPPk8SLavHzYSDM8-Ueul9_oxIMVFuWMWKz0E/edit#heading=h.g11ovq2s1jxh
@@ -771,7 +819,16 @@ func (v *Verifier) Verify(entity SignedEntity, pb PolicyBuilder) (*VerificationR
 	// SignatureContent can be either an Envelope or a MessageSignature.
 	// If it's an Envelope, let's pop the Statement for our results:
 	if envelope := sigContent.EnvelopeContent(); envelope != nil {
-		stmt, err := envelope.Statement()
+		var stmt *in_toto.Statement
+		var err error
+		if v.config.omitStatementPredicate {
+			// The caller opted out of predicate materialization: the
+			// summary carries the statement type, subjects, and
+			// predicate type, with Predicate left nil.
+			stmt, err = summarizeStatement(envelope)
+		} else {
+			stmt, err = envelope.Statement()
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch envelope statement: %w", err)
 		}
